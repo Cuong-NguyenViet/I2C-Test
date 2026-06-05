@@ -3,8 +3,18 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#define I2C_SDA_PIN      21
+// ========================================================
+// CHON DUONG BUS I2C BAN MUON TEST (Mo comment 1 trong 2)
+// ========================================================
+// Cau hinh 1: Duong I2C ra Man hinh OLED (Giac IDC3)
+#define I2C_SDA_PIN      19
 #define I2C_SCL_PIN      22
+
+// Cau hinh 2: Duong I2C ra chip PCF8575 (U2)
+// #define I2C_SDA_PIN      2
+// #define I2C_SCL_PIN      4
+// ========================================================
+
 #define I2C_PORT_NUM     I2C_NUM_0
 
 #define LOG_INFO(msg)    printf("[INFO]    %s\n", msg)

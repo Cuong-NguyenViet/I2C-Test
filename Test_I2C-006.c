@@ -4,13 +4,21 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#define I2C_SDA_PIN      21
+// ========================================================
+// CHON DUONG BUS I2C BAN MUON TEST (Mo comment 1 trong 2)
+// ========================================================
+// Cau hinh 1: Duong I2C ra Man hinh OLED (Giac IDC3)
+#define I2C_SDA_PIN      19
 #define I2C_SCL_PIN      22
-#define I2C_PORT_NUM     I2C_NUM_0
+#define TARGET_ADDR      0x3C  // Dia chi OLED
 
-// !!! Điền địa chỉ 2 thiết bị thực tế trên mạch của bạn vào đây
-#define DEV_1            0x20  
-#define DEV_2            0x3C  
+// Cau hinh 2: Duong I2C ra chip PCF8575 (U2)
+// #define I2C_SDA_PIN      2
+// #define I2C_SCL_PIN      4
+// #define TARGET_ADDR      0x20  // Dia chi PCF8575
+// ========================================================
+
+#define I2C_PORT_NUM     I2C_NUM_0
 
 #define LOG_INFO(msg)    printf("[INFO]    %s\n", msg)
 #define LOG_ERROR(msg)   printf("[ERROR]   %s\n", msg)
@@ -37,24 +45,25 @@ void app_main(void) {
         .sda_pullup_en = GPIO_PULLUP_DISABLE,
         .scl_io_num = I2C_SCL_PIN,
         .scl_pullup_en = GPIO_PULLUP_DISABLE,
-        .master.clk_speed = 400000, 
+        .master.clk_speed = 400000, // Ep chay toc do cao
     };
     i2c_param_config(I2C_PORT_NUM, &conf);
     i2c_driver_install(I2C_PORT_NUM, conf.mode, 0, 0, 0);
 
     int error_count = 0;
-    LOG_INFO("Dang thuc hien truy cap luan phien toc do cao 100 chu ky...");
+    LOG_INFO("Dang thuc hien truy cap toc do cao 100 chu ky...");
 
     for (int i = 0; i < 100; i++) {
-        if (access_device(DEV_1) != ESP_OK) error_count++;
-        if (access_device(DEV_2) != ESP_OK) error_count++;
+        if (access_device(TARGET_ADDR) != ESP_OK) {
+            error_count++;
+        }
         esp_rom_delay_us(100); 
     }
 
     i2c_driver_delete(I2C_PORT_NUM);
 
     if (error_count == 0) {
-        LOG_INFO("Stress test hoan thanh my man. Khong co loi arbitration hay timing.");
+        LOG_INFO("Stress test hoan thanh my man. Khong co loi timing.");
         TEST_PASS("I2C-006");
     } else {
         char error_msg[100];

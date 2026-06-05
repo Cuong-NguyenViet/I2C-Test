@@ -3,12 +3,21 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#define I2C_SDA_PIN      21
+// ========================================================
+// CHON DUONG BUS I2C BAN MUON TEST (Mo comment 1 trong 2)
+// ========================================================
+// Cau hinh 1: Duong I2C ra Man hinh OLED (Giac IDC3)
+#define I2C_SDA_PIN      19
 #define I2C_SCL_PIN      22
-#define I2C_PORT_NUM     I2C_NUM_0
+const uint8_t REQUIRED_DEVICES[] = {0x3C}; // Chi tim OLED tren nhanh nay
 
-// !!! Điền các địa chỉ thiết bị bắt buộc phải có trên mạch AirSense của bạn vào đây
-const uint8_t REQUIRED_DEVICES[] = {0x20, 0x3C}; 
+// Cau hinh 2: Duong I2C ra chip PCF8575 (U2)
+// #define I2C_SDA_PIN      2
+// #define I2C_SCL_PIN      4
+// const uint8_t REQUIRED_DEVICES[] = {0x20}; // Chi tim PCF tren nhanh nay
+// ========================================================
+
+#define I2C_PORT_NUM     I2C_NUM_0
 const int NUM_REQUIRED = sizeof(REQUIRED_DEVICES) / sizeof(REQUIRED_DEVICES[0]);
 
 #define LOG_INFO(msg)    printf("[INFO]    %s\n", msg)

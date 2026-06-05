@@ -1,11 +1,20 @@
 #include <stdio.h>
 #include "driver/gpio.h"
-#include "esp_rom_sys.h" // Thư viện cho hàm delay thế hệ mới
+#include "esp_rom_sys.h" 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#define I2C_SDA_PIN 21
-#define I2C_SCL_PIN 22
+// ========================================================
+// CHON DUONG BUS I2C BAN MUON TEST (Mo comment 1 trong 2)
+// ========================================================
+// Cau hinh 1: Duong I2C ra Man hinh OLED (Giac IDC3)
+#define I2C_SDA_PIN      19
+#define I2C_SCL_PIN      22
+
+// Cau hinh 2: Duong I2C ra chip PCF8575 (U2)
+// #define I2C_SDA_PIN      2
+// #define I2C_SCL_PIN      4
+// ========================================================
 
 #define LOG_INFO(msg)    printf("[INFO]    %s\n", msg)
 #define LOG_ERROR(msg)   printf("[ERROR]   %s\n", msg)
@@ -35,7 +44,7 @@ void app_main(void) {
             LOG_INFO("Giai phong Bus thanh cong! SDA da ve lai muc CAO.");
             TEST_PASS("I2C-005");
         } else {
-            LOG_ERROR("Phuc hoi bang phan mem THIEU HIEU QUA. He thong can HARD RESET!");
+            LOG_ERROR("Phuc hoi bang phan mem THIEU HIEU QUA. Kiem tra chap mach cung!");
             TEST_FAIL("I2C-005");
         }
     } else {
