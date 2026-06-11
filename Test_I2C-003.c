@@ -1,71 +1,87 @@
 #include <stdio.h>
 #include "driver/i2c.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 
-// ========================================================
-// CHON DUONG BUS I2C BAN MUON TEST (Mo comment 1 trong 2)
-// ========================================================
-// Cau hinh 1: Duong I2C ra Man hinh OLED (Giac IDC3)
-#define I2C_SDA_PIN      19
-#define I2C_SCL_PIN      22
-#define TARGET_ADDR      0x3C  // Dia chi OLED
+// --- CAU HINH ---
+#define TEST_CONFIG 1  
+#if TEST_CONFIG == 1
+    #define I2C_SDA_PIN      21
+    #define I2C_SCL_PIN      22
+    #define TEST_NAME        "Duong I2CHW (IDC3, PCF8574, DS3231)"
+#elif TEST_CONFIG == 2
+    #define I2C_SDA_PIN      26
+    #define I2C_SCL_PIN      27
+    #define TEST_NAME        "Duong I2CSW (Giac IDC4)"
+#elif TEST_CONFIG == 3
+    #define I2C_SDA_PIN      2
+    #define I2C_SCL_PIN      4
+    #define TEST_NAME        "Duong I2C rieng cho PCF8575"
+#endif
+#define I2C_PORT_NUM I2C_NUM_0
 
-// Cau hinh 2: Duong I2C ra chip PCF8575 (U2)
-// #define I2C_SDA_PIN      2
-// #define I2C_SCL_PIN      4
-// #define TARGET_ADDR      0x20  // Dia chi PCF8575
-// ========================================================
+// --- MACRO LOG ---
+#define LOG_INFO(fmt, ...)    printf("[INFO]    " fmt "\n", ##__VA_ARGS__)
+#define LOG_WARN(fmt, ...)    printf("[WARN]    " fmt "\n", ##__VA_ARGS__)
+#define LOG_ERROR(fmt, ...)   printf("[ERROR]   " fmt "\n", ##__VA_ARGS__)
+#define TEST_PASS(id)         printf("[TEST]    %s : PASS ==================\n\n", id)
+#define TEST_FAIL(id)         printf("[TEST]    %s : FAIL ==================\n\n", id)
 
-#define I2C_PORT_NUM     I2C_NUM_0
+static esp_err_t init_i2c(uint32_t speed) {
+    i2c_config_t conf = {
+        .mode = I2C_MODE_MASTER, .sda_io_num = I2C_SDA_PIN, .scl_io_num = I2C_SCL_PIN,
+        .sda_pullup_en = GPIO_PULLUP_DISABLE, .scl_pullup_en = GPIO_PULLUP_DISABLE,
+        .master.clk_speed = speed,
+    };
+    i2c_param_config(I2C_PORT_NUM, &conf);
+    return i2c_driver_install(I2C_PORT_NUM, conf.mode, 0, 0, 0);
+}
 
-#define LOG_INFO(msg)    printf("[INFO]    %s\n", msg)
-#define LOG_ERROR(msg)   printf("[ERROR]   %s\n", msg)
-#define TEST_PASS(id)    printf("[TEST]    %s : PASS ==================\n\n", id)
-#define TEST_FAIL(id)    printf("[TEST]    %s : FAIL ==================\n\n", id)
-
-static bool ping_device() {
+static bool ping(uint8_t addr) {
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
     i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, (TARGET_ADDR << 1) | I2C_MASTER_WRITE, true);
+    i2c_master_write_byte(cmd, (addr << 1) | I2C_MASTER_WRITE, true);
     i2c_master_stop(cmd);
-    esp_err_t ret = i2c_master_cmd_begin(I2C_PORT_NUM, cmd, pdMS_TO_TICKS(20));
+    esp_err_t ret = i2c_master_cmd_begin(I2C_PORT_NUM, cmd, pdMS_TO_TICKS(10));
     i2c_cmd_link_delete(cmd);
     return (ret == ESP_OK);
 }
 
 void app_main(void) {
-    vTaskDelay(pdMS_TO_TICKS(1000));
-    LOG_INFO("Dang chay I2C-003: Kiem tra toc do bus...");
+    printf("\n======================================================\n");
+    printf("   BAT DAU KIEM THU I2C-003 (TEST TOC DO CAO)\n");
+    printf("   %s\n", TEST_NAME);
+    printf("======================================================\n\n");
 
-    // Test 100kHz
-    i2c_config_t conf = {
-        .mode = I2C_MODE_MASTER,
-        .sda_io_num = I2C_SDA_PIN,
-        .sda_pullup_en = GPIO_PULLUP_DISABLE,
-        .scl_io_num = I2C_SCL_PIN,
-        .scl_pullup_en = GPIO_PULLUP_DISABLE,
-        .master.clk_speed = 100000,
-    };
-    i2c_param_config(I2C_PORT_NUM, &conf);
-    i2c_driver_install(I2C_PORT_NUM, conf.mode, 0, 0, 0); // Đã fix I2C_PORT_NUM
+    LOG_INFO("Dang chay I2C-003: Kiem tra toc do bus tren da thiet bi...");
+    uint8_t devices[127];
+    int count = 0;
+
+    // Mini-Scan o 100kHz
+    init_i2c(100000);
+    for (uint8_t i = 1; i < 127; i++) {
+        if (ping(i)) devices[count++] = i;
+    }
     
-    bool pass_100k = ping_device();
+    if (count == 0) {
+        LOG_WARN("Bo qua I2C-003: Khong co thiet bi nao de test!");
+        TEST_FAIL("I2C-003");
+        i2c_driver_delete(I2C_PORT_NUM);
+        return;
+    }
+
+    // Chay test 400kHz
+    i2c_driver_delete(I2C_PORT_NUM);
+    init_i2c(400000);
+    bool pass_400k = true;
+    for (int i = 0; i < count; i++) {
+        if (!ping(devices[i])) pass_400k = false;
+    }
     i2c_driver_delete(I2C_PORT_NUM);
 
-    // Test 400kHz
-    conf.master.clk_speed = 400000;
-    i2c_param_config(I2C_PORT_NUM, &conf);
-    i2c_driver_install(I2C_PORT_NUM, conf.mode, 0, 0, 0);
-    
-    bool pass_400k = ping_device();
-    i2c_driver_delete(I2C_PORT_NUM);
-
-    if (pass_100k && pass_400k) {
-        LOG_INFO("Thiet bi phan hoi on dinh o ca hai toc do 100kHz va 400kHz.");
+    if (pass_400k) {
+        LOG_INFO("Tat ca %d thiet bi hoat dong on dinh o 100kHz va 400kHz.", count);
         TEST_PASS("I2C-003");
     } else {
-        LOG_ERROR("Giao tiep gap loi hoac thiet bi khong dap ung duoc toc do cao!");
+        LOG_ERROR("Giao tiep that bai khi chay o toc do 400kHz!");
         TEST_FAIL("I2C-003");
     }
 }

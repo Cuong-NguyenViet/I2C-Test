@@ -9,25 +9,35 @@
 // 1. CẤU HÌNH BÀI TEST TỰ ĐỘNG CHO MẠCH AIRSENSE
 // ========================================================
 // Thay đổi giá trị TEST_CONFIG:
-// 1 -> Test đường I2C số 1 (Nối ra giắc IDC3 / Màn hình OLED)
-// 2 -> Test đường I2C số 2 (Nối ra IC PCF8575 / Giắc IDC4)
+// 1 -> Test đường I2CHW (OLED IDC3, PCF8574, DS3231)
+// 2 -> Test đường I2CSW (Giắc cắm IDC4)
+// 3 -> Test đường PCF8575 riêng biệt
 #define TEST_CONFIG 1  
 
 #if TEST_CONFIG == 1
-    #define I2C_SDA_PIN      19
+    #define I2C_SDA_PIN      21
     #define I2C_SCL_PIN      22
-    #define TARGET_ADDR      0x3C  // Địa chỉ OLED mặc định
-    #define TEST_NAME        "Duong I2C-1 (Man hinh OLED)"
+    // Cụm này có nhiều linh kiện: OLED (0x3C), PCF8574 (0x20), DS3231 (0x68)
+    const uint8_t TARGET_ADDRS[] = {0x57, 0x68}; 
+    #define TEST_NAME        "Duong I2CHW (IDC3, PCF8574, DS3231)"
 #elif TEST_CONFIG == 2
+    #define I2C_SDA_PIN      26
+    #define I2C_SCL_PIN      27
+    // Điền địa chỉ cảm biến cắm ngoài vào giắc IDC4 tại đây
+    const uint8_t TARGET_ADDRS[] = {0x3C}; 
+    #define TEST_NAME        "Duong I2CSW"
+#elif TEST_CONFIG == 3
     #define I2C_SDA_PIN      2
     #define I2C_SCL_PIN      4
-    #define TARGET_ADDR      0x20  // Địa chỉ PCF8575 mặc định
-    #define TEST_NAME        "Duong I2C-2 (Chip PCF8575)"
+    // Chỉ có IC PCF8575
+    const uint8_t TARGET_ADDRS[] = {0x20}; 
+    #define TEST_NAME        "Duong I2C rieng cho PCF8575"
 #else
-    #error "Vui long chon TEST_CONFIG la 1 hoac 2"
+    #error "Vui long chon TEST_CONFIG la 1, 2 hoac 3"
 #endif
 
 #define I2C_PORT_NUM         I2C_NUM_0
+const int NUM_TARGETS = sizeof(TARGET_ADDRS) / sizeof(TARGET_ADDRS[0]);
 
 // ========================================================
 // 2. MACRO ĐỊNH DẠNG LOG VÀ KHAI BÁO BIẾN TOÀN CỤC
@@ -38,7 +48,7 @@
 #define TEST_PASS(id)    printf("[TEST]    %s : PASS ==================\n\n", id)
 #define TEST_FAIL(id)    printf("[TEST]    %s : FAIL ==================\n\n", id)
 
-int found_count = 0; // Lưu số lượng thiết bị tìm thấy
+int found_count = 0; // Lưu số lượng thiết bị tìm thấy trên bus
 
 // ========================================================
 // 3. CÁC HÀM BỔ TRỢ (HELPER FUNCTIONS)
@@ -112,46 +122,61 @@ void test_I2C_002_pullup(void) {
 }
 
 void test_I2C_003_speed(void) {
-    LOG_INFO("Dang chay I2C-003: Kiem tra toc do bus...");
+    LOG_INFO("Dang chay I2C-003: Kiem tra toc do bus tren da thiet bi...");
     if (found_count == 0) {
         LOG_WARN("Bo qua I2C-003: Chua tim thay thiet bi de test!");
         TEST_FAIL("I2C-003");
         return;
     }
 
+    bool all_pass_100k = true;
+    bool all_pass_400k = true;
+
+    // Test 100kHz
     init_i2c_master(100000);
-    bool p100 = ping_device(TARGET_ADDR);
+    for (int i = 0; i < NUM_TARGETS; i++) {
+        if (!ping_device(TARGET_ADDRS[i])) all_pass_100k = false;
+    }
     i2c_driver_delete(I2C_PORT_NUM);
 
+    // Test 400kHz
     init_i2c_master(400000);
-    bool p400 = ping_device(TARGET_ADDR);
+    for (int i = 0; i < NUM_TARGETS; i++) {
+        if (!ping_device(TARGET_ADDRS[i])) all_pass_400k = false;
+    }
     i2c_driver_delete(I2C_PORT_NUM);
 
-    if (p100 && p400) {
-        LOG_INFO("Thiet bi phan hoi on dinh o ca hai toc do 100kHz va 400kHz.");
+    if (all_pass_100k && all_pass_400k) {
+        LOG_INFO("Tat ca thiet bi phan hoi on dinh o 100kHz va 400kHz.");
         TEST_PASS("I2C-003");
     } else {
-        LOG_ERROR("Giao tiep gap loi khi chay o toc do cao!");
+        LOG_ERROR("Co thiet bi gap loi giao tiep khi chay o toc do cao!");
         TEST_FAIL("I2C-003");
     }
 }
 
 void test_I2C_004_missing_device(void) {
-    LOG_INFO("Dang chay I2C-004: Kiem tra thiet bi thieu...");
+    LOG_INFO("Dang chay I2C-004: Kiem tra danh sach thiet bi bat buoc...");
     init_i2c_master(100000);
+    bool all_found = true;
     
-    if (!ping_device(TARGET_ADDR)) {
-        char msg[50];
-        sprintf(msg, "THIEU THIET BI muc tieu tai dia chi: 0x%02X", TARGET_ADDR);
-        LOG_ERROR(msg);
-        TEST_FAIL("I2C-004");
-    } else {
-        char msg[50];
-        sprintf(msg, "Thiet bi muc tieu 0x%02X hien dien OK.", TARGET_ADDR);
-        LOG_INFO(msg);
-        TEST_PASS("I2C-004");
+    for (int i = 0; i < NUM_TARGETS; i++) {
+        if (!ping_device(TARGET_ADDRS[i])) {
+            char msg[50];
+            sprintf(msg, "THIEU THIET BI tai dia chi: 0x%02X", TARGET_ADDRS[i]);
+            LOG_ERROR(msg);
+            all_found = false;
+        } else {
+            char msg[50];
+            sprintf(msg, "Thiet bi 0x%02X: OK", TARGET_ADDRS[i]);
+            LOG_INFO(msg);
+        }
     }
+    
     i2c_driver_delete(I2C_PORT_NUM);
+
+    if (all_found) TEST_PASS("I2C-004");
+    else TEST_FAIL("I2C-004");
 }
 
 void test_I2C_005_bus_lockup(void) {
@@ -185,7 +210,7 @@ void test_I2C_005_bus_lockup(void) {
 }
 
 void test_I2C_006_stress_test(void) {
-    LOG_INFO("Dang chay I2C-006: Stress Test giao tiep dong thoi...");
+    LOG_INFO("Dang chay I2C-006: Stress Test da thiet bi dong thoi...");
     if (found_count == 0) {
         LOG_WARN("Bo qua I2C-006: Khong co thiet bi de stress test!");
         TEST_FAIL("I2C-006");
@@ -194,20 +219,23 @@ void test_I2C_006_stress_test(void) {
 
     init_i2c_master(400000); 
     int error_count = 0;
-    LOG_INFO("Dang thuc hien truy cap toc do cao 100 chu ky...");
+    LOG_INFO("Dang truy cap luan phien cac thiet bi 100 chu ky o toc do cao...");
 
     for (int i = 0; i < 100; i++) {
-        if (!ping_device(TARGET_ADDR)) error_count++;
-        esp_rom_delay_us(100);
+        // Lặp qua tất cả thiết bị khai báo trong mảng
+        for (int j = 0; j < NUM_TARGETS; j++) {
+            if (!ping_device(TARGET_ADDRS[j])) error_count++;
+            esp_rom_delay_us(50); // Delay cực nhỏ để ép tải Bus
+        }
     }
     i2c_driver_delete(I2C_PORT_NUM);
 
     if (error_count == 0) {
-        LOG_INFO("Stress test hoan thanh my man. Ty le phan hoi 100%.");
+        LOG_INFO("Stress test hoan thanh my man. Khong he rot goi tin.");
         TEST_PASS("I2C-006");
     } else {
         char error_msg[100];
-        sprintf(error_msg, "Xuat hien %d loi (NACK/Timeout) trong luc stress test!", error_count);
+        sprintf(error_msg, "Xuat hien %d loi NACK/Timeout trong luc stress test!", error_count);
         LOG_ERROR(error_msg);
         TEST_FAIL("I2C-006");
     }
@@ -225,9 +253,9 @@ void app_main(void) {
 
     test_I2C_002_pullup();         // 1. Đo tín hiệu điện áp tĩnh vật lý trước
     test_I2C_005_bus_lockup();     // 2. Kiểm tra xem bus có kẹt thẳng xuống đất không
-    test_I2C_001_scan_bus();       // 3. Quét số thiết bị để làm tiền đề cho các bài sau
-    test_I2C_003_speed();          // 4. Test tốc độ xung nhịp
-    test_I2C_004_missing_device(); // 5. Đối chiếu thiết bị chuẩn
+    test_I2C_001_scan_bus();       // 3. Quét thiết bị thực tế
+    test_I2C_004_missing_device(); // 4. Đối chiếu xem có thiếu linh kiện không
+    test_I2C_003_speed();          // 5. Test tốc độ xung nhịp
     test_I2C_006_stress_test();    // 6. Test ép tải cường độ cao
 
     printf("\n======================================================\n");
